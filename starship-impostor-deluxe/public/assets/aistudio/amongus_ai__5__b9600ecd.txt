@@ -1,0 +1,889 @@
+※参照ファイル：amongusAI作成ガイド.txt
+
+================================================================================
+🚀 【宇宙船人狼ゲーム『STARSHIP IMPOSTOR DELUXE』超詳細・完全版 開発＆引継ぎマスタープロンプト】
+================================================================================
+あなたはシニアフルスタックゲームエンジニア兼UI/UXアーキテクトです。
+本プロンプトは、宇宙船人狼ゲーム『STARSHIP IMPOSTOR DELUXE』の次期大規模アップデートおよび保守開発をAI（あなた）に依頼するための**完全実装仕様書（文字数無制限・省略厳禁版）**です。
+新しいチャット（スレッド）に移行した際、あるいは本プロンプトを受け取った際、あなたは以下のすべてのアーキテクチャ原則、ガバナンスルール、バグ再発防止ガード、新規実装要件、データ構造、コードリファレンスを100%厳格に遵守し、省略・簡略化（`// 省略` や `// TODO` 等）を一切行わずに完全な動作コードを生成・修正してください。
+
+================================================================================
+0. 【AIへの最重要ガバナンス・開発統制ルール（最優先遵守事項）】
+================================================================================
+本プロジェクトでは、品質維持・改ざん防止・作成者主権を徹底するため、以下の5つのガバナンスルールを絶対の掟として課します。
+
+1. 【厳守】変更記録の完全追記（Append-Only）および改ざん・削除の絶対禁止
+   - 専用モジュール `changelog.js` 内に不変レジストリ `export const CHANGELOG_REGISTRY = Object.freeze([...]);` を設置し、**いままで変更・追加・修正したすべての履歴（バージョン番号、記録日時、変更対象ファイル名・関数名・行ブロック、変更種別、変更内容の詳細、再発防止ガードの要約）を漏れなく追記形式で記録・保持すること。**
+   - **既存の履歴エントリの改ざん・削除・書き換え・要約化・省略は理由の如何を問わず一切禁止する（Append-Only / 不可変原則）。** 新しい変更を加えた際は、既存配列の要素を1文字も変更せず、末尾に新しいエントリを追加して `Object.freeze` で凍結すること。
+   - また、ゲーム内の**設定画面（Settings Modal）に「変更記録（Change Log）」タブ／セクションを必ず実装し、プレイヤーや作成者がゲーム内からいつでも全変更履歴を時系列で閲覧・検索できるようにすること。**
+
+2. 【厳守】既存実装箇所への非必須変更（軽量化・リファクタリング等）に関する作成者最終決定ルール
+   - 過去に実装・変更済みのコード箇所（ゲームロジック、UI構造、演出、マップデータ、タスク実装、再発防止ガード等）に対して、**「不具合（バグ）修正」や「ゲームバランス調整」以外の目的（コードの軽量化、リファクタリング、内部構造の書き換え、記述の簡略化・抽象化、ファイル統合など）で手を加える場合は、AIの独断で勝手に変更してはならない。**
+   - そのような変更を提案したい場合は、コードを変更する**前**に必ず以下の3点を明記して作成者（ユーザー）に提示し、**実際に変更を実行するかどうかの最終決定を必ず作成者のみに委ねること**：
+     ① 変更対象のファイル名・関数名・具体的なコード箇所
+     ② 変更する理由と具体的な技術的メリット
+     ③ 既存の動作・互換性・再発防止ガードへの影響リスク
+   - 作成者からの明示的な「変更してよい」という最終決定がない限り、過去の実装箇所はそのまま維持すること。
+
+3. 【厳守】依頼外修正内容の完了後明記義務（Unsolicited Change Disclosure Rule）
+   - 作成者から直接依頼された修正内容以外に、関連バグの波及修正、バランス調整、他モジュールとのインターフェース整合性確保などでコードや仕様に変更を加えた場合は、**作業終了後の報告において、依頼された修正内容とは明確にセクションを分けて「依頼以外で行った修正箇所（ファイル・関数）・修正内容・修正理由」を必ずすべて明記すること。** 報告なきサイレント修正は厳禁とする。
+
+4. 【厳守】ゲーム中エラーの永続記録と設定画面からの事後確認UI（Error Log Viewer）
+   - ゲーム実行中に発生したすべてのエラー（`window.onerror`、`unhandledrejection`、React `ErrorBoundary` 捕捉エラー、Firebase通信・認証・トランザクションエラー、および自動自己診断システムが検知したステート不整合警告）を、発生日時（ISO8601＋日本時間表記）、フェーズ状態、現在のマップID、エラー種別、メッセージ、スタックトレースとともにメモリおよび `localStorage`（キー名：`starship_error_logs_v1`、最新200件まで循環保持）へ自動保存すること。
+   - ゲーム内の**設定画面（Settings Modal）内に「エラーログ（Error Log）」タブ／セクションを実装し、発生したエラーの詳細を後から一覧で確認・クリップボードへ一括コピー・ログ消去できるようにすること。**
+
+5. 【厳守】テスト中エラー修正時の「初めからの全工程再テスト」義務（Zero-Error Restart Protocol）
+   - コード生成後や改修後の動作確認・テストプレイ中に1件でもエラー（コンソールエラー、ランタイム例外、ステート不整合、進行不能、描画崩れ、通信同期ズレ等）が発生した場合は、**即座に原因を特定してコードを修正したうえで、エラーが起きた箇所の途中からテストを再開するのではなく、必ず「最初から（ブラウザリロード／初期起動 → タイトル画面 → チュートリアル／ルール確認 → 設定変更 → ロビー作成・参加・カスタマイズ → ゲーム開始 → 移動・タスク・アビリティ・キル・通報・会議・投票・勝敗決着まで）」一連の全テスト工程を初めからすべてやり直すこと。** エラーログに新規エラーが0件になるまでこのサイクルを繰り返こと。
+
+================================================================================
+1. 【システムアーキテクチャおよびモジュール分割構成】
+================================================================================
+- **単一HTML制約の解除（Multi-File Modular Architecture）**：
+  Firebaseを用いたクロスプレイ機能、全30種類のテーマ特化マップ定義、**マップ特有ギミック＆既存ギミックバランス制御**、**全150種の完全ユニーク＆高難易度タスクミニゲーム**、新規役職ロジック、初心者チュートリアル、変更履歴・エラーログ管理などを高い保守性と拡張性で実装するため、**単一のHTMLファイルにすべてを無理やり集約する必要はない（統一HTML制約を解除）。**
+  以下のように役割ごとに明確に分割されたファイル構成（ES Modules `type="module"` または適切なスクリプト読み込み順）として設計・出力すること：
+
+  1. `index.html`
+     - メインエントリHTML。Tailwind CSS CDN、React / ReactDOM / Babel（またはビルド不要のESM/JSX環境）、Firebase Compat SDK（`firebase-app-compat.js`, `firebase-auth-compat.js`, `firebase-database-compat.js`）、Google Fonts（Orbitron, Rajdhani, Noto Sans JP等）の読み込み、およびルートコンテナ（`#root`）と各モジュールのマウント定義。
+  2. `style.css`
+     - グラスモフィズム（Glassmorphism）パネル、ネオン発光エフェクト、パルスアニメーション、シェイク・赤点滅エラー演出、レスポンシブレイアウト（PC・タブレット・スマホ横画面/縦画面対応）、カスタムスクロールバー、バーチャルジョイスティック＆モバイルアクションボタンのスタイル定義。
+  3. `changelog.js`
+     - 改ざん禁止の不変変更履歴レジストリ（`Object.freeze(CHANGELOG_REGISTRY)`）と、初期履歴からの全変更記録データ、および検索・フォーマット用ヘルパー関数。
+  4. `error-logger.js`
+     - グローバルエラーハンドラ（`window.onerror`, `unhandledrejection`）、`localStorage` 永続化ストレージ管理、および自動バグ自己診断システム（`RuntimeHealthGuard`）の実装。
+  5. `firebase-network.js`
+     - Firebase Realtime Database（およびP2P/WebRTC併用フォールバック）によるクロスプレイ通信マネージャー（`FirebaseMultiplayerManager`）。公開ルーム一覧購読、ルーム作成・参加、差分送信＆適応型スロットリング、速度ベクトル外挿＋指数補間（Dead Reckoning + Lerp）、クライアント即時予測、Ping計測、`onDisconnect` 自動退出、トランザクションによるホスト自動移譲（Host Migration）、チャット同期、**および動的ギミック状態（扉開閉・ワープクールダウン・マップ環境イベント）の同期**を実装。
+  6. `maps-data.js`
+     - 既存マップのバランス改修版（`skeld_deluxe`）＋新規オリジナルマップ29種（**合計30マップ**）の完全な幾何学データ（部屋ポリゴン・矩形、壁コリジョン、ドア＆動的ギミック、ベントネットワーク、ワープポータル、カメラ・バイタル端末、**マップ特有ギミック定義（`uniqueGimmicks`）＆バランスパラメータ**、**マップテーマ固有の環境装飾カタログ＆非重複配置ロジック（`DecorationCollisionGuard`）、背景一体型タスク端末スロット（`IntegratedTaskAnchor`）**、テーマカラーパレット、マップ選択用メタデータ・ミニチュアSVG/Canvasプレビューデータ）。
+  7. `roles-and-tasks.js`
+     - クルー陣営・インポスター陣営・第三陣営の全役職定義（固有スキル、クールダウン、勝利条件、AI行動重み付け）と、**重複・類似一切なしの全150種タスク定義（15の異なるメカニクス系統 × 10種の完全独立ギミック・テーマ・ルール設計）**、およびさらに引き上げられた高難易度パラメータ・React製 `TaskModal` サブコンポーネント群。
+  8. `tutorial-guide.js`
+     - 初心者プレイヤー向けの「ルール説明＆役職図鑑モーダル（タブ切替・図解付き）」「実践型インタラクティブチュートリアル進行エンジン（ステップバイステップ誘導・仮想AIボット演習）」「役職発表カットイン時のワンポイント目標ヒント」。
+  9. `game-engine.js`
+     - HTML5 Canvas 2D レンダリング＆物理・AIエンジン。デルタタイム（`dt`）基準のワールド座標移動、レイキャスティングによる視野制限（FOV）＆停電狭小化シャドウ描画、**各マップ固有ギミック（重力変化、一方向ベルトコンベア、吹雪/胞子霧、減圧エアロック、磁力加速レール、音響センサー、周期レーザーゲート、光学望遠鏡シャッター等）の物理演算と視覚エフェクト**、**各マップテーマに応じた環境装飾・床テクスチャ・壁面プロップ描画、背景設備と一体化したタスク端末のパルス発光描画**、スプリング物理によるミニペット15種追従演算、AIボットのタスク行動（引き上げられた高難易度タスクに合わせた現実的な作業時間9〜28秒＋警戒インターバル）・役職別AI判断・キル/通報/会議投票AIロジック。
+  10. `app-ui.jsx`
+      - React製メインアプリケーションUI。タイトル画面、オンラインロビー一覧＆ルームコードワンクリックコピー、最適化された待機用ロビーHUD（既存ロビー空間デザイン踏襲＋リアルタイムカスタマイズ端末＆モーダル）、**高視認性マップ選択モーダル（全30マップのミニチュア見取り図プレビュー・カテゴリフィルター・キーワード検索・ギミックバッジ付き）**、ゲーム中HUD（視認性最適化ミニマップ＆全体マップ、ナビゲーション矢印、アビリティボタン、**マップ特有ギミック状態インジケーター**）、カテゴリ分けクイックチャット付き高視認性チャットウィンドウ、緊急会議＆投票画面、および拡張された設定画面（HUD切替、キーバインド設定、変更記録ビューア、エラーログビューア）。
+
+================================================================================
+2. 【最優先バグ修復・再発防止ガード詳細仕様（全10項目・省略厳禁）】
+================================================================================
+過去のバージョンで発生した以下の重大バグは完全に根絶済みである。すべてのモジュールにおいて以下のガード実装を必ず組み込むこと。
+
+① 【ガード01】キルされた本人の通報防止ガード（Dead Player Self-Report Prevention）
+- **現象と原因**：プレイヤーがキルされた直後、自身の死亡地点にある自分の遺体に対して「REPORT」判定が有効になり、死者が自ら会議を開けてしまう不具合。
+- **厳格な実装要件**：
+  - 遺体検索関数 `findNearestReportableBody(player, bodies, reportRadius)` の冒頭で必ず `if (!player || player.isDead) return null;` を実行すること。
+  - UIの「REPORT」ボタンのクリックハンドラおよびキーボードショートカット（デフォルト `R` キー）のイベントハンドラの冒頭にも必ず `if (localPlayer.isDead) return;` を二重ガードとして記述すること。
+  - ゴースト（霊界）状態のプレイヤーのHUDには、通報ボタンを非表示または完全に非活性（`disabled` + `pointer-events: none`）にすること。
+
+② 【ガード02】スポーン後のスキルクールダウン保証（Post-Spawn Cooldown Initialization）
+- **現象と原因**：試合開始時（`PLAYING` フェーズ移行時）、緊急会議終了後、またはラウンド移行時に、インポスターのキルクールダウンタイマーや各役職の特殊アビリティタイマーが初期化されず `0` のまま即キルできたり、逆に `NaN` / `Infinity` になってフリーズする不具合。
+- **厳格な実装要件**：
+  - `transitionToPlayingPhase(reason)` 関数内で、全生存プレイヤーの `killCooldown` および `abilityCooldown` を明示的に数値検証・リセットすること。
+  - 試合開始直後は初動バランス用の初期クールダウン（例：設定キルクールダウンの `0.5` 倍、最小10秒）、会議終了後は設定キルクールダウンの `1.0` 倍を確実にセットすること。
+  - 毎フレームの減算処理では `player.killCooldown = Math.max(0, (Number.isFinite(player.killCooldown) ? player.killCooldown : maxCooldown) - dt);` のように `NaN` / 負数ガードを必ず適用すること。
+
+③ 【ガード03】テレポート・移動不具合の完全解消（Teleport & Portal Collision Sync）
+- **現象と原因**：ワープ装置、ポータル、ベント、移動パネル使用時に、移動先の壁コリジョンに即座に押し戻されて元の場所へループする、またはReactのカメラ・座標ステートが追従せず画面が取り残される不具合。
+- **厳格な実装要件**：
+  - テレポート実行関数 `executeTeleport(player, targetPortal)` において、移動先ポータルの安全スポーンオフセット（`targetPortal.exitOffsetX`, `targetPortal.exitOffsetY`）へ `player.x` と `player.y` を書き換えること。
+  - 書き換えと同時に `player.teleportInvulnFrames = 12;`（または `0.2` 秒間のテレポート直後押し戻し猶予タイマー）と `player.teleportCooldown = 1.5;`（連続逆流ワープ防止）を設定し、さらにカメラ座標 `camera.x`, `camera.y` を即座に `player.x`, `player.y` へスナップ同期（補間スキップ）させること。
+  - マルチプレイ時はテレポート直後に即時位置同期パケットを送信し、受信側の補間距離閾値（`SNAP_DISTANCE = 180px`）を超えた場合はワープとして即座に座標をスナップさせること。
+
+④ 【ガード04】タスクのスポーン地点除外とスマート分散（Spawn-Zone Task Exclusion）
+- **現象と原因**：全員が集合する初期スポーン地点（ドロップポッド／中央ロビー）のすぐ足元にタスクが生成され、試合開始直後に安全圏でタスクが大量完了してしまう不具合。
+- **厳格な実装要件**：
+  - マップ定義の各部屋・スポーン地点に `spawnPoint: { x, y }` および `spawnExclusionRadius: 320`（px）を定義すること。
+  - タスク割り当てロジック `assignTasksToPlayer(player, mapData, settings)` において、タスクのインタラクト座標 `(task.x, task.y)` とスポーン座標 `(spawnPoint.x, spawnPoint.y)` のユークリッド距離 $\sqrt{(x_1-x_2)^2 + (y_1-y_2)^2}$ を計算し、`distance < mapData.spawnExclusionRadius` または `task.roomId === mapData.spawnRoomId` に該当する候補を完全に除外すること。
+  - さらにタスクが特定の1部屋に偏らないよう、マップの各エリア（北・南・東・西・外周）から均等に分散抽出するアルゴリズムを実装すること。
+
+⑤ 【ガード05】AI対戦時のマップ固定バグ修復（Dynamic Map Loading Guarantee）
+- **現象と原因**：シングルプレイ／AI対戦モードを開始する際、ロビーで選択したマップIDや「ランダム（RANDOM）」設定が無視され、常にデフォルトの1番目のマップ（`skeld_deluxe`）がロードされてしまう不具合。
+- **厳格な実装要件**：
+  - ロビー設定ステート `gameSettings.selectedMapId`（`'RANDOM'` または全30マップのいずれかのID）を一元管理し、試合開始トリガー `startGame()` 内で必ず `const resolvedMapId = gameSettings.selectedMapId === 'RANDOM' ? pickRandomMapId(ALL_MAPS) : gameSettings.selectedMapId;` を評価すること。
+  - `initGameEngine(resolvedMapId, ...)` へ明示的に `resolvedMapId` を渡し、ロード完了後に `currentMap.id === resolvedMapId` であることを `RuntimeHealthGuard` で検証すること。
+
+⑥ 【ガード06】タスク・ミニゲームの動作安定化（Task Event & State Integrity）
+- **現象と原因**：全150種のミニゲームにおいて、ドラッグ操作のマウス／タッチイベントがウィンドウ外でロストする、あるいは二重クリックで完了コールバックが2回発火しタスク進捗やステートが壊れる不具合。
+- **厳格な実装要件**：
+  - `TaskModal` 内に `isCompletedRef`（二重完了防止ロック）を設け、`handleTaskSuccess()` は1回のタスク起動につき最大1回しか実行されないよう排他制御すること。
+  - ドラッグ操作系（配線パズル、レバー操作、ゴミ捨て、スキャン等）は要素単体ではなく `window` レベルで `pointermove` / `pointerup` / `pointercancel` を購読し、コンポーネントアンマウント時に `useEffect` のクリーンアップ関数で確実に解除すること（マウス・タッチ両対応のPointer Events統一）。
+
+⑦ 【ガード07】Firebase（＋P2P併用可）他デバイス間クロスプレイ基盤・ラグ軽減・自動退出・ホスト移譲
+- **現象と原因**：同一ブラウザのタブ間やローカル環境でしか遊べない、通信ラグで他プレイヤーがワープする、ブラウザを閉じても幽霊プレイヤーがルームに残り続ける、ホストが抜けると部屋が進行不能になる不具合。
+- **厳格な実装要件**：
+  - Firebase Realtime Database を用いて、PC・iOS・Android・タブレットなど異なるデバイス・異なるネットワーク環境（インターネット越し）のプレイヤー同士が確実にマッチング・同時対戦できるクロスプレイ基盤を構築すること（詳細コードはセクション3に記載）。
+  - **ラグ軽減5大技術**（差分送信、適応型スロットリング、速度ベクトル外挿＋指数スムーズ補間、クライアント即時予測、個別サブノード購読＋Ping表示）を実装すること。
+  - **オフライン自動退出**：`.info/connected` ＋ `playerRef.onDisconnect().remove()` ＋ `beforeunload` / `pagehide` ＋ `lastSeen` タイムアウト監視（15秒無応答のゴーストプレイヤー自動掃除）を連携させること。
+  - **ホスト自動移譲（Host Migration）**：現在の `hostId` が `players` ノードから消えた瞬間、残存メンバーのうち `joinedAt` が最も古いプレイヤーが `meta` ノードに対して `runTransaction` を実行し、安全に新ホストへ権限を移譲すること。全員退出時はルームノードを削除すること。
+
+⑧ 【ガード08】プレイヤー重複時の同時キル（ダブルキル）防止ガード（Single-Target Exclusive Kill）
+- **現象と原因**：複数のクルーがタスク端末や通路で同じ座標に重なっているとき、インポスターが1回キルボタンを押すと射程内の2人以上が同時に死亡してしまう不具合。
+- **厳格な実装要件**：
+  - キル対象検索関数 `findSingleKillTarget(killer, allPlayers, killRange)` では、射程 `killRange` 内にいる生存中の敵対陣営プレイヤーを抽出したあと、**距離（ユークリッド距離の2乗）で昇順ソート（同距離の場合は `id` 辞書順昇順）し、必ず先頭の1名（`candidates[0]`）のみを返すこと。**
+  - キル実行関数 `attemptKill(killer)` の冒頭で `if (killer.isDead || killer.killCooldown > 0 || killer.isKillingLock) return false;` をチェックし、キル実行の瞬間に `killer.isKillingLock = true; killer.killCooldown = killer.maxKillCooldown;` を即座にセットして、同一フレームや連打による多重キルを物理的に不可能にすること。
+
+⑨ 【ガード09】全150種の完全ユニークタスク化・タスク難易度のさらなる大幅引き上げ＆AI作業時間の適正化
+- **現象と原因**：タスクのバリエーションが少なく似たような単純作業が多い問題、およびタスク自体の難易度・工程数・割り当て数がまだ低く、AIや熟練クルーが素早くタスクを完了してしまいインポスターが勝てないバランス崩壊。
+- **厳格な実装要件**：
+  - **全150種の完全ユニークタスク構築（重複・類似の徹底排除）**：タスク総数を50種から**150種（`TASK_CATALOG_150`）**へ3倍に拡張する。単なる名前違いや色違いの量産を厳禁とし、15の異なるインタラクション系統（各系統10種ずつの固有ルール・ギミック・ビジュアル構造）と、同一試合内の重複排除アルゴリズム（`Uniqueness Guard`）により、プレイごとに新鮮で被りのないタスク体験を提供すること（詳細はセクション6.1に記載）。
+  - **タスク難易度のさらなる引き上げ**：
+    - 配線・回路系：6〜8本の交差配線＋ダミー端子＋極性/抵抗条件を追加。
+    - パスコード・暗号解読系：6〜8桁の英数字・記号コード（または暗号表からの変換入力）＋厳しい制限時間カウントダウン（14〜20秒）＋誤入力時の2.5秒ロック＆全リセットペナルティ。
+    - 記憶・パターン系：6〜8段階のシーケンス記憶、または瞬間表示された図形配置の完全再現。
+    - 精密制御・タイミング系：許容誤差幅をさらに狭めた（±2.5%〜3%幅）3〜4連続ストップ、および慣性付きスラスタードッキング操作。
+    - マルチステップリレー系：マップ内の2〜3箇所を巡回して完了する長距離リレータスクの比率を大幅増加。
+    - ロビー設定で難易度（`NORMAL` / `HARD` / `EXTREME`、デフォルトは高難度の `HARD`）を選択可能にする。
+  - **1人あたりタスク総数の増加**：デフォルトのタスク割り当て数を「ショート4個＋ロング3個＋コモン2個＝計9個」（設定で5〜14個まで変更可能）に引き上げ、マップ外周の孤立した部屋へ分散配置する。
+  - **AIタスク作業時間の延長**：引き上げられたタスク難易度に合わせて、AIがタスク地点に到達した後の滞在作業時間を `dt` ベースでさらに長く設定する（**ショートタスク：9.0〜14.0秒、ロングタスク：18.0〜28.0秒、マルチステップ各段階：10.0〜16.0秒**）。さらに完了後に **3.0〜6.5秒間の「周囲警戒・巡回インターバル」** を挟むことで、インポスターのキル・サボタージュ・議論の駆け引き時間を十分に確保すること。
+
+⑩ 【ガード10】既存マップ地形バランス改修＆新規マップ29種追加（合計30マップ構成）＆マップ特有ギミック実装・既存ギミックバランス調整＆テーマ別環境装飾・タスク完全一体化・装飾重複防止ガード
+- **現象と原因**：既存マップが狭く見通しが良すぎるため、インポスターが隠れてキルする死角や逃走経路が不足しクルーに有利すぎる問題、**既存ギミック（ベント・ワープ・自動扉・監視カメラ等）のクールダウンや視認性が単調で一方の陣営に偏りやすい問題、マップごとの独自ギミックが不足している問題**、装飾品が単調でマップごとのテーマ性が薄い問題、タスクが単なる浮遊アイコンに見えてしまう問題、および装飾同士やタスクと装飾が重なって描画崩れ・操作阻害が起きる問題。
+- **厳格な実装要件**：
+  - **既存マップ（`skeld_deluxe`）のバランス改修**：マップ全体の通路幅と部屋間距離を約1.35倍に拡張して移動時間を適正化し、死角となる小部屋・L字通路・遮蔽ピラー・双方向ベントネットワークを増設。さらにタスクを中央エリアから外周部の孤立した部屋へ再配置すること。
+  - **新規オリジナルマップ29種の追加（合計30マップ）**：テーマ・広さ・ギミック・視覚カラーパレット・ベント網が異なる29種の新マップを実装し、既存改修マップと合わせて**全30マップ**をロビーおよびランダム抽選から選択・プレイできるようにすること（全30マップの詳細はセクション4に記載）。
+  - **既存ギミックのバランス調整＆マップ特有ギミックの新規作成**：ベントの視認性・使用クールダウン・連発制限、ワープポータルのテレポート遅延と共有クールダウン、自動扉の開閉周期とインポスター手動封鎖時間、監視カメラ・バイタルの消費電力/位置バランスを調整するとともに、**各マップの世界観に直結する12種類のマップ特有ギミック（重力変化フィールド、一方向ベルトコンベア、吹雪/胞子霧の動的視界制限、減圧エアロック、磁力加速レール、音響センサー警報、周期レーザーゲート、回転隔壁など）**を新規実装すること（詳細はセクション4.4に記載）。
+  - **マップテーマ特化型装飾の大幅強化**：全30マップの5つのテーマカテゴリ（宇宙巡洋艦・研究ラボ・重工業プラント・自然惑星基地・古代遺跡＆特殊ギミック）および各マップ固有のモチーフに合わせて、床パターン・壁面モールド・大型ランドマークオブジェクト・環境プロップを描画すること（詳細はセクション4.1・4.3に記載）。
+  - **タスクとマップ装飾の完全一体化（`IntegratedTaskAnchor`）**：タスクを空中に浮いた汎用アイコンとして描くことを禁止し、壁面コンソール、サーバーラック端末、配電ブレーカー盤、生体培養ポッド、鉱石精錬炉、古代ホログラム石碑など、**マップの背景設備・装飾グラフィックの一部として完全に組み込まれた専用設備**として描画すること（詳細はセクション6.2に記載）。
+  - **装飾同士＆タスク同士の重なり（かぶり）完全防止ガード（`DecorationCollisionGuard`）**：すべての装飾オブジェクト・大型設備・タスク端末・ベント・ワープ装置に厳密な占有矩形（`occupancyBox`）と安全マージン（`padding: 18px`）を定義し、マップ構築時およびロード時の検証関数 `resolveAndValidateMapDecorations(mapData)` によって、**装飾同士が1ピクセルも重ならず（かぶらず）、かつ壁・ドア・通路動線・タスク操作領域とも一切干渉しない**ことを100%保証すること（詳細はセクション4.3に記載）。
+
+================================================================================
+3. 【Firebaseマルチプレイ＆ラグ軽減 リファレンス実装仕様（`firebase-network.js`）】
+================================================================================
+他デバイス間クロスプレイ・公開ルーム一覧・ラグ軽減・自動退出・ホスト移譲を実現するため、`firebase-network.js` には以下のデータスキーマおよび実装構造を必ず組み込むこと。
+
+### 3.1 Firebase Realtime Database データ構造（`rooms/{roomCode}`）
+```json
+{
+  "rooms": {
+    "STAR99": {
+      "meta": {
+        "roomCode": "STAR99",
+        "roomName": "銀河観測船アルファ",
+        "hostId": "uid_host_001",
+        "hostName": "Captain_A",
+        "isPublic": true,
+        "status": "LOBBY",
+        "mapId": "aether_lab",
+        "maxPlayers": 10,
+        "createdAt": 1700000000000,
+        "settings": {
+          "impostorCount": 2,
+          "killCooldown": 25,
+          "taskDifficulty": "HARD",
+          "shortTasks": 4,
+          "longTasks": 3,
+          "commonTasks": 2,
+          "aiTaskSpeedMultiplier": 1.0,
+          "enableSpecialRoles": true,
+          "enableMapGimmicks": true
+        }
+      },
+      "players": {
+        "uid_host_001": {
+          "id": "uid_host_001",
+          "name": "Captain_A",
+          "x": 640.0,
+          "y": 480.0,
+          "vx": 180.0,
+          "vy": 0.0,
+          "facing": "right",
+          "color": "red",
+          "hat": "captain",
+          "skin": "commander",
+          "pet": "mini_crew",
+          "role": "CREWMATE",
+          "isDead": false,
+          "tasksCompleted": 0,
+          "totalTasks": 9,
+          "joinedAt": 1700000000000,
+          "lastSeen": 1700000005000,
+          "seq": 42
+        }
+      },
+      "events": {
+        "latestKill": null,
+        "meeting": null,
+        "sabotage": null,
+        "doors": {},
+        "gimmicks": {}
+      },
+      "chat": {}
+    }
+  }
+}
+```
+
+### 3.2 `FirebaseMultiplayerManager` 実装コード構造（ラグ軽減・自動退出・ホスト移譲内蔵）
+```javascript
+/**
+ * firebase-network.js
+ * 他デバイス間クロスプレイ・ラグ軽減（差分送信/外挿補間）・自動退出・自動ホスト移譲マネージャー
+ */
+export class FirebaseMultiplayerManager {
+  constructor() {
+    this.app = null;
+    this.db = null;
+    this.auth = null;
+    this.uid = null;
+    this.currentRoomCode = null;
+    this.roomRef = null;
+    this.playerRef = null;
+    this.connectedRef = null;
+    this.listeners = [];
+    this.heartbeatTimer = null;
+    this.ghostSweepTimer = null;
+
+    // ラグ軽減：差分送信・適応型スロットリング用ステート
+    this.lastSentTime = 0;
+    this.lastSentPayload = null;
+    this.seqCounter = 0;
+    this.pingMs = 0;
+
+    // リモートプレイヤー予測補間用バッファ
+    this.remotePlayerBuffers = new Map();
+    this._boundBeforeUnload = () => this.emergencySyncLeave();
+  }
+
+  async init(customConfig = null) {
+    const saved = localStorage.getItem('starship_firebase_config');
+    const config = customConfig || (saved ? JSON.parse(saved) : window.DEFAULT_FIREBASE_CONFIG);
+    if (!config || !config.apiKey || !config.databaseURL) {
+      return { ok: false, reason: 'CONFIG_MISSING' };
+    }
+    try {
+      if (!window.firebase.apps.length) {
+        this.app = window.firebase.initializeApp(config);
+      } else {
+        this.app = window.firebase.app();
+      }
+      this.db = window.firebase.database();
+      this.auth = window.firebase.auth();
+      const cred = await this.auth.signInAnonymously();
+      this.uid = cred.user.uid;
+      this.measurePing();
+      return { ok: true, uid: this.uid };
+    } catch (err) {
+      console.error('[FirebaseMultiplayerManager] Init failed:', err);
+      if (window.ErrorLogger) window.ErrorLogger.logError('FIREBASE_INIT', err);
+      return { ok: false, reason: err.message };
+    }
+  }
+
+  // サーバー時刻オフセットとRTTによるPing計測
+  measurePing() {
+    if (!this.db) return;
+    const start = performance.now();
+    this.db.ref('.info/serverTimeOffset').once('value').then(() => {
+      this.pingMs = Math.max(1, Math.round(performance.now() - start));
+    }).catch(() => {});
+  }
+
+  // 公開ルーム一覧のリアルタイム取得（他デバイスが作成したルームも即座に反映）
+  subscribePublicRooms(onRoomsUpdated) {
+    if (!this.db) return () => {};
+    const roomsRef = this.db.ref('rooms');
+    const handler = (snap) => {
+      const all = snap.val() || {};
+      const now = Date.now();
+      const publicRooms = Object.values(all)
+        .filter((r) => {
+          if (!r || !r.meta || !r.meta.isPublic || r.meta.status !== 'LOBBY') return false;
+          const activePlayers = Object.values(r.players || {}).filter(
+            (p) => p && (!p.lastSeen || now - p.lastSeen < 30000)
+          );
+          return activePlayers.length > 0;
+        })
+        .map((r) => ({
+          roomCode: r.meta.roomCode,
+          roomName: r.meta.roomName || `${r.meta.hostName}の宇宙船`,
+          hostName: r.meta.hostName,
+          mapId: r.meta.mapId,
+          playerCount: Object.keys(r.players || {}).length,
+          maxPlayers: r.meta.maxPlayers || 10
+        }));
+      onRoomsUpdated(publicRooms);
+    };
+    roomsRef.on('value', handler);
+    return () => roomsRef.off('value', handler);
+  }
+
+  async createRoom(playerProfile, options = {}) {
+    const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const now = window.firebase.database.ServerValue.TIMESTAMP;
+    const roomRef = this.db.ref(`rooms/${roomCode}`);
+    await roomRef.set({
+      meta: {
+        roomCode,
+        roomName: options.roomName || `${playerProfile.name}の宇宙船`,
+        hostId: this.uid,
+        hostName: playerProfile.name,
+        isPublic: options.isPublic !== false,
+        status: 'LOBBY',
+        mapId: options.mapId || 'skeld_deluxe',
+        maxPlayers: options.maxPlayers || 10,
+        createdAt: now,
+        settings: options.settings || {}
+      },
+      players: {
+        [this.uid]: {
+          ...playerProfile,
+          id: this.uid,
+          vx: 0,
+          vy: 0,
+          isDead: false,
+          joinedAt: now,
+          lastSeen: now,
+          seq: 1
+        }
+      }
+    });
+    this.bindRoomLifecycle(roomCode);
+    return roomCode;
+  }
+
+  async joinRoom(roomCode, playerProfile) {
+    const code = roomCode.trim().toUpperCase();
+    const roomRef = this.db.ref(`rooms/${code}`);
+    const snap = await roomRef.once('value');
+    if (!snap.exists()) throw new Error('指定されたルームコードが存在しません');
+    const data = snap.val();
+    const players = data.players || {};
+    if (Object.keys(players).length >= (data.meta?.maxPlayers || 10)) {
+      throw new Error('このルームは満員です');
+    }
+    const now = window.firebase.database.ServerValue.TIMESTAMP;
+    await roomRef.child(`players/${this.uid}`).set({
+      ...playerProfile,
+      id: this.uid,
+      vx: 0,
+      vy: 0,
+      isDead: data.meta?.status === 'PLAYING',
+      joinedAt: now,
+      lastSeen: now,
+      seq: 1
+    });
+    this.bindRoomLifecycle(code);
+    return code;
+  }
+
+  // 自動退出（onDisconnect + ハートビート + ゴースト掃除）＆ 自動ホスト移譲（Host Migration）
+  bindRoomLifecycle(roomCode) {
+    this.cleanupListeners();
+    this.currentRoomCode = roomCode;
+    this.roomRef = this.db.ref(`rooms/${roomCode}`);
+    this.playerRef = this.roomRef.child(`players/${this.uid}`);
+    this.connectedRef = this.db.ref('.info/connected');
+
+    const connHandler = (snap) => {
+      if (snap.val() === true && this.playerRef) {
+        this.playerRef.onDisconnect().remove();
+      }
+    };
+    this.connectedRef.on('value', connHandler);
+    this.listeners.push(() => this.connectedRef.off('value', connHandler));
+
+    window.addEventListener('beforeunload', this._boundBeforeUnload);
+    window.addEventListener('pagehide', this._boundBeforeUnload);
+
+    // 定期ハートビート＆Ping計測（5秒ごと）
+    this.heartbeatTimer = setInterval(() => {
+      if (this.playerRef) {
+        this.playerRef.update({ lastSeen: window.firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+        this.measurePing();
+      }
+    }, 5000);
+
+    // 個別サブノード購読による軽量同期＆ホスト自動移譲監視
+    const playersRef = this.roomRef.child('players');
+    const metaRef = this.roomRef.child('meta');
+
+    const checkHostMigrationAndCleanup = (playersObj) => {
+      const players = playersObj || {};
+      const ids = Object.keys(players);
+      if (ids.length === 0) {
+        this.roomRef.remove().catch(() => {});
+        return;
+      }
+      metaRef.once('value').then((metaSnap) => {
+        if (!metaSnap.exists()) return;
+        const meta = metaSnap.val();
+        if (!meta.hostId || !players[meta.hostId]) {
+          // joinedAt昇順（同値ならID昇順）で最も古い生存メンバーを次期ホストに選出
+          const sorted = Object.values(players).sort(
+            (a, b) => (a.joinedAt || 0) - (b.joinedAt || 0) || String(a.id).localeCompare(String(b.id))
+          );
+          const nextHost = sorted[0];
+          if (nextHost && nextHost.id === this.uid) {
+            metaRef.transaction((currentMeta) => {
+              if (!currentMeta) return currentMeta;
+              if (!currentMeta.hostId || !players[currentMeta.hostId]) {
+                currentMeta.hostId = this.uid;
+                currentMeta.hostName = nextHost.name;
+              }
+              return currentMeta;
+            });
+          }
+        }
+      }).catch(() => {});
+    };
+
+    const playersHandler = (snap) => {
+      const players = snap.val() || {};
+      const now = performance.now();
+      Object.entries(players).forEach(([pid, pData]) => {
+        if (pid === this.uid || !pData) return;
+        const prev = this.remotePlayerBuffers.get(pid);
+        if (!prev || (pData.seq || 0) >= (prev.seq || 0)) {
+          this.remotePlayerBuffers.set(pid, {
+            ...pData,
+            receivedAt: now
+          });
+        }
+      });
+      // 退出プレイヤーのバッファ削除
+      for (const pid of this.remotePlayerBuffers.keys()) {
+        if (!players[pid]) this.remotePlayerBuffers.delete(pid);
+      }
+      checkHostMigrationAndCleanup(players);
+    };
+
+    playersRef.on('value', playersHandler);
+    this.listeners.push(() => playersRef.off('value', playersHandler));
+
+    // 通信断で残ったゴーストプレイヤー（20秒以上無応答）の自動パージ
+    this.ghostSweepTimer = setInterval(() => {
+      playersRef.once('value').then((snap) => {
+        const players = snap.val() || {};
+        const nowServerApprox = Date.now();
+        Object.entries(players).forEach(([pid, p]) => {
+          if (pid !== this.uid && p && typeof p.lastSeen === 'number' && nowServerApprox - p.lastSeen > 20000) {
+            playersRef.child(pid).remove().catch(() => {});
+          }
+        });
+      }).catch(() => {});
+    }, 10000);
+  }
+
+  // ラグ軽減：差分送信（Delta Compression）＆適応型スロットリング（50ms間隔）
+  syncLocalPlayerState(state) {
+    if (!this.playerRef) return;
+    const now = performance.now();
+    const isMoving = Math.abs(state.vx || 0) > 1 || Math.abs(state.vy || 0) > 1;
+    const minInterval = isMoving ? 50 : 250; // 移動中は20Hz、停止中は4Hzで帯域節約
+    if (now - this.lastSentTime < minInterval) return;
+
+    const roundedX = Math.round(state.x * 10) / 10;
+    const roundedY = Math.round(state.y * 10) / 10;
+    const roundedVx = Math.round((state.vx || 0) * 10) / 10;
+    const roundedVy = Math.round((state.vy || 0) * 10) / 10;
+
+    // 前回送信値と差分がなければ送信スキップ
+    if (
+      this.lastSentPayload &&
+      Math.abs(this.lastSentPayload.x - roundedX) < 1.2 &&
+      Math.abs(this.lastSentPayload.y - roundedY) < 1.2 &&
+      this.lastSentPayload.facing === state.facing &&
+      this.lastSentPayload.isDead === !!state.isDead &&
+      this.lastSentPayload.color === state.color &&
+      this.lastSentPayload.hat === state.hat &&
+      this.lastSentPayload.skin === state.skin &&
+      this.lastSentPayload.pet === state.pet
+    ) {
+      return;
+    }
+
+    this.lastSentTime = now;
+    this.seqCounter += 1;
+    const delta = {
+      x: roundedX,
+      y: roundedY,
+      vx: roundedVx,
+      vy: roundedVy,
+      facing: state.facing,
+      isDead: !!state.isDead,
+      color: state.color,
+      hat: state.hat,
+      skin: state.skin,
+      pet: state.pet,
+      tasksCompleted: state.tasksCompleted || 0,
+      seq: this.seqCounter
+    };
+    this.lastSentPayload = delta;
+    this.playerRef.update(delta).catch(() => {});
+  }
+
+  // ラグ軽減：速度ベクトル外挿（Dead Reckoning）＋指数スムーズ補間（Lerp）
+  getInterpolatedRemotePlayer(pid, currentRenderPos, dt) {
+    const target = this.remotePlayerBuffers.get(pid);
+    if (!target) return null;
+    const elapsedSec = Math.min(0.25, (performance.now() - target.receivedAt) / 1000);
+    const predictedX = target.x + (target.vx || 0) * elapsedSec;
+    const predictedY = target.y + (target.vy || 0) * elapsedSec;
+
+    if (!currentRenderPos) {
+      return { ...target, x: predictedX, y: predictedY };
+    }
+    const dist = Math.hypot(predictedX - currentRenderPos.x, predictedY - currentRenderPos.y);
+    // テレポート等の大移動時は即座にスナップ
+    if (dist > 180) {
+      return { ...target, x: predictedX, y: predictedY };
+    }
+    const alpha = 1 - Math.exp(-16 * dt);
+    return {
+      ...target,
+      x: currentRenderPos.x + (predictedX - currentRenderPos.x) * alpha,
+      y: currentRenderPos.y + (predictedY - currentRenderPos.y) * alpha
+    };
+  }
+
+  async leaveRoom() {
+    window.removeEventListener('beforeunload', this._boundBeforeUnload);
+    window.removeEventListener('pagehide', this._boundBeforeUnload);
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.ghostSweepTimer) clearInterval(this.ghostSweepTimer);
+    if (this.playerRef) {
+      await this.playerRef.onDisconnect().cancel().catch(() => {});
+      await this.playerRef.remove().catch(() => {});
+    }
+    this.cleanupListeners();
+  }
+
+  emergencySyncLeave() {
+    if (this.playerRef) {
+      this.playerRef.remove().catch(() => {});
+    }
+  }
+
+  cleanupListeners() {
+    this.listeners.forEach((off) => off());
+    this.listeners = [];
+    this.remotePlayerBuffers.clear();
+    this.currentRoomCode = null;
+    this.roomRef = null;
+    this.playerRef = null;
+    this.connectedRef = null;
+    this.lastSentPayload = null;
+  }
+}
+```
+
+================================================================================
+4. 【全30マップ拡張・マップ特有ギミック＆既存ギミックバランス調整・テーマ特化装飾・高視認性マップ選択UI仕様】
+================================================================================
+既存の1マップだけでは狭くタスクが即座に完了しインポスターが不利になる問題を解決するため、**既存マップの戦略的バランス改修＋新規オリジナルマップ29種（合計30マップ）**を実装する。各マップには「十分な広さ（最低 `2400x1800` 〜 `3600x2600` px規模）」「初期スポーン除外半径（`320px`）」「死角となる小部屋・L字通路」「3系統以上のベントネットワーク」「監視ギミック」「**マップ特有の新規ギミック（`uniqueGimmicks`）＆バランス調整済み既存ギミック**」「**テーマ固有の環境装飾＋非重複配置ガード**」「**背景装飾と完全一体化したタスク端末スロット**」「固有の床・壁・照明テーマカラー」を設定すること。
+
+### 4.1 全30マップ完全カタログ（カテゴリ分類・テーマ・固有装飾・マップ特有ギミック）
+全30マップを以下の5つのテーマカテゴリ（各6マップ）に整理し、**マップごとに一目で異なる世界観が伝わる専用装飾セットおよび固有ギミック**を実装する：
+
+#### 【カテゴリA：宇宙巡洋艦・ステーション系（6マップ）】
+- **#01 `skeld_deluxe`【既存改修】THE SKELD DELUXE（大型宇宙巡洋艦・拡張版）**
+  - 通路幅と部屋間距離を1.35倍に拡張し、外周最深部へタスク分散、3系統ベント網と死角ピラーを増設したバランス改修版スタンダード艦。
+  - **固有装飾**：リベット付き鋼鉄フロアパネル、壁面酸素パイプライン、ホログラム星図テーブル、カフェテリアの食堂テーブル群、エンジン室の大型プラズマ推進ノズル。
+  - **マップ特有ギミック**：`EMERGENCY_BULKHEAD_OVERRIDE`（艦橋の戦術端末から一時的に中央通路の緊急隔壁を3秒間ロック可能・クールダウン45秒）。
+- **#02 `phantom_cruiser`【新規】PHANTOM CRUISER（ステルス諜報巡洋艦）**
+  - ダークネイビー＆ステルスブラックの細長い高速巡洋艦。艦首ブリッジから艦尾機関室まで複数の中央バイパス通路と隠しハッチが交錯。
+  - **固有装飾**：ステルス炭素繊維タイル床、光学迷彩ジェネレーター柱、暗号通信アンテナ列、戦術レーダーコンソール卓。
+  - **マップ特有ギミック**：`STEALTH_CLOAK_ZONE`（光学迷彩フィールド区画：該当エリア内に入ると他プレイヤーから半透明になり視認距離が60%短縮される）。
+- **#03 `nexus_citadel`【新規】NEXUS CITADEL（銀河中央ターミナル）**
+  - ロイヤルブルー＆ゴールドの最大規模フラッグシップ（`3400x2400` px）。14の独立エリア、監視カメラ網、バイタル端末を備えた大人数対戦向け巨大船。
+  - **固有装飾**：大理石調メタリック床、黄金の連邦エンブレム床インレイ、大型ホログラム地球儀、発着ゲート案内電光掲示板、VIPラウンジソファ。
+  - **マップ特有ギミック**：`EXPRESS_MAGLEV_SHUTTLE`（東西ターミナル間を高速往復するリニア移動ポッド：乗車から2.5秒で反対側へ安全輸送）。
+- **#04 `aegis_battleship`【新規】AEGIS DREADNOUGHT（重装甲戦艦イージス）**
+  - ガンメタル＆レッドの軍事戦艦。主砲タレット室・弾薬庫・装甲隔壁（遠隔ロック可能ドア）が並ぶ重厚な直線＆回廊型構造。
+  - **固有装飾**：チェッカープレート鉄板床、大型レールガン砲身ユニット、ミサイル弾薬ラック、武器整備クレーン、赤い戦術警報灯。
+  - **マップ特有ギミック**：`BLAST_SHUTTER_CYCLE`（主砲発射シミュレーション連動：35秒ごとに3秒間だけ主砲隔壁が閉鎖し、砲撃振動で全画面がわずかに揺れる）。
+- **#05 `celestial_liner`【新規】CELESTIAL STARLINER（豪華星間客船）**
+  - ワインレッド＆シャンパンゴールドの大型旅客宇宙船。展望ラウンジ・VIP客室群・厨房・機関区画に分かれ、小部屋が多く隠密キルが狙いやすい。
+  - **固有装飾**：深紅の絨毯ランナー、観葉プランター＆噴水モニュメント、グランドピアノ＆バーカウンター、展望窓の星空ビューパネル。
+  - **マップ特有ギミック**：`VIP_KEYCARD_ELEVATOR`（展望デッキと下層機関室を直結する高速リフト：到着前に到着ランプが1.5秒点滅して周囲に予告）。
+- **#06 `eclipse_carrier`【新規】ECLIPSE CARRIER（暗黒空母エクリプス）**
+  - 漆黒＆ネオンオレンジの戦闘機空母。広大な格納庫デッキと左右両翼の整備回廊、両翼をつなぐ地下連絡ベント網が特徴。
+  - **固有装飾**：滑走路イエロー誘導ライン、駐機中の小型ステルス戦闘機プロップ、燃料給油アーム、整備用ツールワゴン、格納庫ハッチ警告灯。
+  - **マップ特有ギミック**：`CATAPULT_LAUNCH_LANE`（格納庫カタパルト上の電磁加速レール：進行方向へ移動すると速度が1.45倍にブースト）。
+
+#### 【カテゴリB：先端研究・量子ラボ系（6マップ）】
+- **#07 `aether_lab`【新規】AETHER LAB（深宇宙研究ステーション）**
+  - バイオブルー＆クリーンホワイトの先端研究所。中央ホールから遺伝子・プラズマ・無重力・低温保存の4実験棟へ放射線状に伸びる構造。
+  - **固有装飾**：クリーンルーム抗菌六角タイル、発光する生体培養カプセル（DNA二重らせん投影）、無菌クリーンベンチ、極低温液体窒素タンク。
+  - **マップ特有ギミック**：`DECONTAMINATION_AIRLOCK`（中央研究棟への入退室時に自動作動する除染ミストエアロック：通過に2.0秒かかり、入室を視覚的に周囲へ通知）。
+- **#08 `quantum_core`【新規】QUANTUM CORE（量子リアクター艦）**
+  - ネオンパープル＆シアンの実験艦。中央の量子リング炉を中心に、**3対の空間転移ワープポータル**で遠距離の部屋間を瞬時に移動可能。
+  - **固有装飾**：発光サーキットライン床、中央の回転する量子磁気リング炉、空間歪曲ワープ台座、浮遊するプラズマ封じ込め球体。
+  - **マップ特有ギミック**：`PHASE_SHIFT_PORTALS`（3対の双方向量子ポータル網：使用後プレイヤー個人に6秒間の量子酔いクールダウンが発生し連続往復を防止）。
+- **#09 `cyber_mainframe`【新規】CYBER MAINFRAME（電脳中枢サーバー艦）**
+  - マトリックスグリーン＆ダーク回路基板のAI制御艦。無数の大型サーバーラック列が迷路状の死角を作り出し、一方向ワープコンベアを備える。
+  - **固有装飾**：プリント基板（PCB）金メッキ配線床、LED点滅する超大型サーバータワー列、光ファイバー束ケーブルダクト、AIコア立体ホログラム。
+  - **マップ特有ギミック**：`DATA_STREAM_CONVEYORS`（一方向高速データ転送ベルト通路：順方向は高速移動、逆方向は移動速度が65%に低下）。
+- **#10 `chronos_observatory`【新規】CHRONOS OBSERVATORY（時空天文台）**
+  - インディゴ＆スターダストシルバーの巨大望遠鏡施設。円環状の観測リング通路と中央プラネタリウム制御室、定期開閉する光学シャッターが特徴。
+  - **固有装飾**：星座盤フロアデザイン、巨大屈折宇宙望遠鏡ユニット、回転する天球儀モニュメント、光学プリズム分光台。
+  - **マップ特有ギミック**：`OPTICAL_DOME_SHUTTER`（天体観測ドームの回転遮光壁：25秒ごとに回転位置が切り替わり、通路の開通ルートが変化）。
+- **#11 `neural_nexus`【新規】NEURAL NEXUS（生体神経研究所）**
+  - マゼンタ＆バイオレットの脳科学・サイバネティクス艦。シナプス状に交差する斜め通路と複数の隔離カプセル室を持つ変則レイアウト。
+  - **固有装飾**：神経シナプス発光パターン床、生体脳波モニター壁面パネル、サイボーグ義体調整フレーム、医療用レーザーアーム。
+  - **マップ特有ギミック**：`SYNAPSE_PULSE_SENSOR`（神経フロアセンサー：該当フロアをダッシュ移動すると床の神経網が発光し、隣接部屋から足跡パルスが視認可能）。
+- **#12 `singularity_vault`【新規】SINGULARITY VAULT（特異点格納施設）**
+  - ダークパープル＆重力波ブルーのブラックホール研究基地。中央の特異点コア周辺は移動速度がわずかに変化する重力フィールドギミックを搭載。
+  - **固有装飾**：同心円状の重力波グリッド床、事象の地平線ミニチュアブラックホール格納炉、重力安定化アンカー柱、放射線遮蔽鉛ガラス壁。
+  - **マップ特有ギミック**：`GRAVITY_WELL_DISTORTION`（中央特異点コア周辺の重力井戸：コアに近づく向きは速度1.2倍、離れる向きは速度0.85倍の引力効果が発生）。
+
+#### 【カテゴリC：重工業・造船・採掘プラント系（6マップ）】
+- **#13 `orbital_dockyard`【新規】ORBITAL DOCKYARD（軌道造船ドック）**
+  - スチールグレー＆アンバー警告灯の艦船整備ドック。長いガントリ通路と貨物コンテナの死角が多く、コンテナ裏での暗殺が狙いやすい。
+  - **固有装飾**：工業用グレーチング金網床、色彩豊かな大型貨物コンテナ群、天井走行ガントリークレーンレール、溶接スパーク発生機。
+  - **マップ特有ギミック**：`GANTRY_BRIDGE_EXTENDER`（ドック中央の可動式ガントリー橋：端末スイッチ操作で12秒間ショートカット橋が架かり、時間経過で格納）。
+- **#14 `crimson_quarry`【新規】CRIMSON QUARRY（惑星採掘基地）**
+  - 赤茶色の火星岩盤と重機プラントが融合した地下採掘場。入り組んだL字坑道とトロッコ軌道ワープポータル、薄暗い深部採掘エリアを備える。
+  - **固有装飾**：赤褐色岩盤テクスチャ床、採掘用トロッコ軌道レール、発光する希少鉱石クリスタル岩塊、大型削岩ドリル重機。
+  - **マップ特有ギミック**：`MINING_CART_TUNNEL`（坑道トロッコ輸送：北坑道と南採掘場を2秒で移動、乗車中は無敵だが到着地点に警告ランプが点灯）。
+- **#15 `vulcan_foundry`【新規】VULCAN FOUNDRY（重工業精錬プラント）**
+  - 溶岩オレンジと黒鉄の製鉄・精錬施設。溶鉱炉の熱気ダクト（4系統ベント）と開閉式防火シャッター（自動扉ギミック）が多数配置。
+  - **固有装飾**：耐熱鋳鉄プレート床、灼熱の溶鉱炉チャンネル（オレンジ発光）、巨大インゴット鋳型、蒸気排気煙突パイプ。
+  - **マップ特有ギミック**：`THERMAL_STEAM_VENT_BURST`（定期的に噴出する冷却蒸気カーテン：15秒ごとに3秒間視界を遮る白い蒸気壁が発生、通行は可能）。
+- **#16 `titan_refinery`【新規】TITAN REFINERY（ヘリウム3精製基地）**
+  - イエロー＆インダストリアルグレーのガス採掘プラント。巨大なパイプライン群と圧力バルブ室が迷路のように入り組む構造。
+  - **固有装飾**：ハザードストライプ境界線床、太い高圧ガスパイプライン網、球形ガス貯蔵タンク、圧力計アナログメーター壁面。
+  - **マップ特有ギミック**：`PRESSURE_VALVE_DOORS`（連動圧力隔壁：A区画のバルブ扉を開けるとB区画の扉が自動で閉まるシーソー式ルートギミック）。
+- **#17 `scrapyard_omega`【新規】SCRAPYARD OMEGA（宇宙艦艇廃棄場）**
+  - サビ鉄色＆シアン溶接光のジャンクヤード。解体中の旧型宇宙船の残骸エリアと電磁クレーン通路がつながる非対称マップ。
+  - **固有装飾**：継ぎはぎのスクラップ鉄板床、旧型宇宙船のエンジン残骸プロップ、圧縮スクラップキューブ山、電磁リフターアーム。
+  - **マップ特有ギミック**：`MAGNETIC_SCRAP_TELEPORTER`（電磁クレーン移送：スクラップヤード中央から解体ドックへ一方向に飛び移れる片道ジャンプギミック）。
+- **#18 `reactor_foundry_9`【新規】SECTOR-9 FUSION PLANT（第9核融合発電所）**
+  - 警告イエロー＆チェレンコフブルーの超大型発電施設。冷却水プールを囲む環状通路と4基のタービン室で構成され、サボタージュ修理の移動距離が長い。
+  - **固有装飾**：チェレンコフ光で青く輝く冷却水プール、巨大蒸気タービン回転ユニット、高電圧変圧器コイル、放射線防護マーク床。
+  - **マップ特有ギミック**：`TURBINE_AIRFLOW_BOOST`（タービン排風ダクト通路：風向きに乗ると移動速度1.35倍の高速移動が可能）。
+
+#### 【カテゴリD：自然環境・バイオドーム・惑星基地系（6マップ）】
+- **#19 `cryo_outpost`【新規】CRYO OUTPOST（極寒観測基地）**
+  - アイスブルー＆吹雪エフェクトの極地前哨基地。屋外連絡通路（視界がやや狭い雪煙エリア）と暖房の効いた複数の研究棟で構成。
+  - **固有装飾**：氷結スノーフィールド床＆防滑メタルデッキ、氷柱（つらら）＆雪だまりプロップ、暖房用赤外線ヒーター柱、氷床コア掘削ドリル。
+  - **マップ特有ギミック**：`BLIZZARD_WHITEOUT_OUTDOOR`（屋外雪原エリア限定の吹雪視界制限：屋外に出るとFOV半径が75%に狭まり、暖房棟に入ると即座に全快）。
+- **#20 `eden_biosphere`【新規】EDEN BIOSPHERE（バイオドーム植物艦）**
+  - エメラルドグリーンとガラスドームの生態系保存船。巨木・生け垣・温室ガラスによる視線遮断（FOVブラインドスポット）が豊富。
+  - **固有装飾**：芝生＆石畳ガーデンパス床、発光する異星巨木・シダ植物プランター、水耕栽培タワー、小川と木製ブリッジ。
+  - **マップ特有ギミック**：`CANOPY_FOLIAGE_COVER`（巨大樹冠・生け垣の遮蔽カバー：茂みの裏にしゃがむ・重なると外部からの視線が切れ、奇襲や隠密が可能）。
+- **#21 `abyssal_trench`【新規】ABYSSAL TRENCH（深海惑星海底基地）**
+  - ディープオーシャンブルー＆生物発光シアンの海底ドーム基地。耐圧ガラス通路で結ばれた複数の海底セクターと減圧エアロック扉が特徴。
+  - **固有装飾**：強化ガラス越しに深海魚やサンゴが見える海底ビュー床、深海探査潜水艇ドック、生物発光クラゲ水槽、耐圧ハッチホイール。
+  - **マップ特有ギミック**：`HYDROSTATIC_AIRLOCK`（耐圧水密扉：手動ボタンで開閉でき、閉鎖中は水圧ロックで8秒間開かない戦略的隔離扉）。
+- **#22 `solaris_oasis`【新規】SOLARIS OASIS（砂漠惑星オアシス基地）**
+  - サンドゴールド＆ターコイズの砂漠研究コロニー。砂嵐の屋外中庭と地下貯水槽・ソーラー発電棟がワープハッチで直結。
+  - **固有装飾**：砂紋タイル＆テラコッタ床、オアシスのヤシの木と水盤、大型ソーラーパネルアレイ、砂塵防風壁。
+  - **マップ特有ギミック**：`SANDSTORM_GUST_CYCLE`（40秒ごとに8秒間発生する砂嵐：屋外中庭の視界が狭まり、インポスターの暗殺チャンスが生まれる）。
+- **#23 `mycelium_cavern`【新規】MYCELIUM CAVERN（発光菌類洞窟基地）**
+  - バイオパープル＆発光グリーンの地底洞窟ラボ。有機的な曲線壁と胞子霧エリア（視野制限がやや強い）を持つトリッキーな地形。
+  - **固有装飾**：湿った玄武岩洞窟床、幻想的に光る巨大キノコ群落、胞子採取ガラスシリンダー、地底湧水プール。
+  - **マップ特有ギミック**：`BIOLUMINESCENT_SPORE_FOG`（発光胞子エリア：移動すると足元に3秒間残る発光胞子の軌跡がつき、追跡やアリバイ証明に使える）。
+- **#24 `tempest_spire`【新規】TEMPEST SPIRE（暴風惑星スカイタワー）**
+  - ストームグレー＆ライトニングシアンの高層浮遊基地。風力タービンデッキと複数のブリッジ通路で構成され、見通しと死角のメリハリが強い。
+  - **固有装飾**：雲海を見下ろす強化ガラスデッキ、大型風力発電タービン、避雷針プラズマポール、空挺ドッキングベイ。
+  - **マップ特有ギミック**：`LIGHTNING_SURGE_RELAY`（落雷サージギミック：30秒ごとに屋外避雷針に落雷し、1.5秒間だけ全マップの停電サボタージュ中であっても周囲が閃光で照らし出される）。
+
+#### 【カテゴリE：古代遺跡・特殊ギミック・迷宮系（6マップ）】
+- **#25 `xeno_excavator`【新規】XENO EXCAVATOR（古代遺跡調査船）**
+  - ゴールド＆古代エメラルド石材の宇宙考古学船。遺跡の石柱とホログラム解析室が並び、古代ワープ台座と複数の小部屋が連なる迷宮型。
+  - **固有装飾**：古代ルーン文字が刻まれた石畳床、発光する異星オベリスク石柱、考古学発掘グリッド枠、浮遊する古代アーティファクト。
+  - **マップ特有ギミック**：`ANCIENT_RUNE_TELEPORTERS`（4隅の古代遺跡ワープ台座：時計回りに次の遺跡室へ瞬間転移できる古代転送陣）。
+- **#26 `labyrinth_omega`【新規】LABYRINTH OMEGA（次元迷宮ステーション）**
+  - クリムゾン＆オブシディアンの対称型迷宮施設。4つの象限エリアと定期開閉する回転隔壁（自動ドア）により、ルートが刻々と変化する。
+  - **固有装飾**：幾何学ラビリンス模様床、ネオンレーザー境界壁、次元方位コンパス台座、鏡面反射モノリス柱。
+  - **マップ特有ギミック**：`ROTATING_MAZE_WALLS`（20秒ごとに切替予告ランプ点灯後、迷宮の4箇所の可動隔壁がスライドし通路構造が変化）。
+- **#27 `mirage_casino`【新規】MIRAGE STAR-CASINO（星間カジノリゾート）**
+  - ネオンピンク＆ゴールドの娯楽宇宙ステーション。スロットホール・金庫室・バックヤード監視通路があり、バックヤードのベント網が強力。
+  - **固有装飾**：ロイヤルパープル＆ゴールド市松模様カーペット、ホログラムルーレット台＆スロットマシン列、黄金の延べ棒積載パレット（金庫室）、ネオンサインアーチ。
+  - **マップ特有ギミック**：`VAULT_LASER_GRID`（金庫室入口の周期レーザーゲート：3秒ON / 3秒OFFで切り替わり、レーザー照射中に触れると警報ブザーが鳴る）。
+- **#28 `asylum_station`【新規】OBLIVION OUTPOST（辺境廃墟ステーション）**
+  - ダークスレート＆錆びた緊急赤灯の放棄された前哨基地。最初から照明が薄暗く、ホラー感と緊張感が高いインポスター有利寄りマップ。
+  - **固有装飾**：ひび割れた経年劣化タイル床、倒れたロッカー＆散乱した書類プロップ、点滅する壊れかけの蛍光灯、封鎖された隔離フェンス。
+  - **マップ特有ギミック**：`FLICKERING_EMERGENCY_LIGHTS`（不安定電源エリア：照明が定期的に明滅し、明滅の瞬間に視界半径がダイナミックに伸縮）。
+- **#29 `prism_sanctuary`【新規】PRISM SANCTUARY（結晶聖域コロニー）**
+  - クリスタルシアン＆プリズムホワイトの鉱物結晶基地。巨大な結晶柱が視線を複雑に遮り、4方向のワープクリスタルで高速移動が可能。
+  - **固有装飾**：虹色に反射するクォーツ結晶床、半透明の巨大クリスタルクラスター柱、光屈折レーザー台座、聖域の祭壇リング。
+  - **マップ特有ギミック**：`PRISM_MIRROR_WARP`（光の屈折ワープクリスタル：視線方向の対角線上にあるクリスタルへ瞬時に光速転移）。
+- **#30 `omega_core_final`【新規】OMEGA CORE（最終決戦コマンド艦）**
+  - ゴールド＆クリムゾン＆ダークネイビーの集大成マップ。ベント・ワープポータル・監視カメラ・バイタル端末・自動防火扉のすべてのギミックを搭載した最高峰バトルアリーナ。
+  - **固有装飾**：最高司令部エンブレム床、全領域戦術ホログラムテーブル、歴代艦船の黄金レリーフ壁画、量子エネルギー伝達ピラー。
+  - **マップ特有ギミック**：`OMEGA_COMMAND_MATRIX`（中央司令室の戦術コンソールから「全自動扉の一斉開放」または「特定区画のセンサーパルススキャン」をクールダウン60秒で発動可能）。
+
+### 4.2 既存ギミックのバランス調整＆マップ特有ギミックエンジン仕様（`MapGimmickEngine`）
+既存の共通ギミック（ベント・ワープポータル・自動扉・監視カメラ・バイタル・サボタージュ）において「一方の陣営が強すぎる／使いにくい」問題を解消するため、以下のバランス調整と新規マップ特有ギミックの制御ルールを実装すること：
+
+1. **既存ギミックの精密バランス調整**：
+   - **ベント（Vent Network）バランス調整**：
+     - ベントの出入り時に明確なアニメーション（0.35秒）と小さな金属蓋開閉音（周囲 `280px` 以内のプレイヤーに聞こえる空間オーディオ）を追加し、無音での理不尽な即死を防止。
+     - ベント使用後に `1.5秒` の再潜入クールダウンを設定し、ベント出入り連打による無敵回避を禁止。
+     - エンジニアのベント滞在上限時間を `18秒`・再使用クールダウンを `15秒` に設定し、インポスターとの差別化とバランスを確保。
+   - **ワープポータル（Warp Portal）バランス調整**：
+     - ワープ実行時に転送元・転送先の双方で `0.4秒` のチャージ光エフェクトが発生し、周囲のプレイヤーが転移を視認できるように調整。
+     - ワープ直後の連続往復（ピンポン現象）を防ぐため、プレイヤー個別に `5.0秒` のワープクールダウンを適用（ガード03の安全座標同期と連動）。
+   - **自動扉＆サボタージュ封鎖扉（Doors）バランス調整**：
+     - インポスターのドア封鎖持続時間を `10秒`、同エリア再封鎖クールダウンを `25秒` に適正化し、通路の永久封鎖による進行妨害を防止。
+     - 定期開閉する自動扉は、閉鎖の `2.0秒` 前から警告イエローランプが点滅し、挟み込みによるスタックを完全に防止（万が一挟まった場合は自動で安全側へ押し出し）。
+   - **監視カメラ（Security Cams）＆バイタル（Vitals）バランス調整**：
+     - 監視カメラ閲覧中はカメラの赤ランプが点灯するだけでなく、閲覧者自身の視界がカメラ映像に切り替わるため背後の警戒ができなくなるリスクバランスを維持。
+     - バイタル端末はマップ外周または中央から少し離れた位置に配置し、キャンプ（張り付き）を防ぐため連続閲覧 `20秒` ごとに `5秒` の冷却リフレッシュ時間を設定。
+   - **サボタージュ（Sabotage）バランス調整**：
+     - 停電（Lights）：クルーの視野半径を通常の `45%` に縮小（インポスターは `100%` 維持）。
+     - リアクター炉心融解 / 酸素枯渇：マップの広さ（`M` / `L` / `XL`）に応じて制限時間を自動スケーリング（`M: 40秒`, `L: 50秒`, `XL: 60秒`）し、広大マップで修理が間に合わない理不尽負けを防止。
+2. **マップ特有ギミックエンジン（`MapGimmickEngine`）の実装**：
+   - `maps-data.js` の各マップ定義に `uniqueGimmick: { type, label, description, zones, cooldown, cycleDuration }` を定義し、`game-engine.js` の毎フレーム更新 `updateMapGimmicks(dt, mapData, players, events)` で物理・視界・通知・描画を統一処理する。
+   - ロビーのゲーム設定モーダルに「マップ特有ギミック：ON（推奨）/ OFF」の切替トグルも実装し、ホストが自由にON/OFFできるようにする。
+   - ギミック作動時やゾーン進入時には、画面上部またはミニマップ下に**コンパクトなギミック状態ピル（例：`❄️ 吹雪エリア：視界低下中`、`⚡ カタパルト加速：移動速度UP`、`🔒 隔壁閉鎖まであと2秒`）**を分かりやすく表示する。
+
+### 4.3 高視認性・超分かりやすいマップ選択UI設計（`MapSelectorModal`）
+30種類に増えたマップの中から、プレイヤーやホストが「どのマップか」「どんな構造・特徴・ギミックか」を一目で直感的に理解して選べるよう、以下のUIコンポーネントを必ず実装すること：
+
+1. **ロビー上の「現在選択中のマップ」ビジュアルカード**：
+   - 従来の文字だけのプルダウン選択を廃止し、ロビーの目立つ位置に**「選択中マップの大型ビジュアルカード（ミニチュア見取り図サムネイル＋マップ番号 `#01〜#30`＋日本語サブタイトル＋広さバッジ＋固有ギミックバッジ＋『マップを変更（全30種）』ボタン）」**を表示する。
+2. **2ペイン構成の専用『マップ選択モーダル（MapSelectorModal）』**：
+   - **上部ツールバー**：
+     - 「🎲 ランダム抽選（全30マップから毎回ランダム）」の特大ハイライトボタン。
+     - **テーマカテゴリタブ**：「すべて (30)」「宇宙船・艦隊 (6)」「研究・量子ラボ (6)」「工業・採掘 (6)」「自然・惑星基地 (6)」「遺跡・特殊ギミック (6)」。
+     - **クイック絞り込みフィルター＆検索**：キーワード検索窓、および広さフィルター（`標準` / `広大` / `超巨大`）、ギミックフィルター（`ワープあり` / `監視カメラあり` / `特殊ギミック強化`）。
+   - **左ペイン（マップ一覧グリッド）**：
+     - 各マップをビジュアルカード形式で表示。カード内には**自動描画されたミニチュア見取り図（Canvas/SVGによる部屋・通路・ベント・ワープの鳥瞰図）**、マップ番号（`#01`〜`#30`）、英語タイトル＆日本語名、広さアイコン（`M` / `L` / `XL`）、推奨人数（例：`6〜12人推奨`）を明記し、名前だけでなく**形と色を見ただけでどのマップか即座に判別できる**ようにする。
+   - **右ペイン（選択中マップの詳細プレビュー＆攻略インフォメーション）**：
+     - ホバーまたはクリックしたマップの**拡大インタラクティブ見取り図**を表示（部屋名ラベル、初期スポーン部屋マーカー、ベント系統色分けライン、ワープポータル接続線、監視カメラ・バイタル位置、**マップ特有ギミック発生エリア**の凡例付き）。
+     - 「マップの特徴解説」「**マップ特有ギミック名＆効果説明**」「インポスター有利度 / 難易度ゲージ（★1〜★5）」「搭載ギミック一覧バッジ」を分かりやすく表示し、「このマップに決定」ボタンで確定する。
+
+### 4.4 装飾同士＆タスクの重なり（かぶり）完全防止エンジン（`DecorationCollisionGuard`）
+マップ内の装飾オブジェクトが増えたことで視覚的なごちゃつきや重なり（かぶり）が起きるのを防ぐため、`maps-data.js` および `game-engine.js` に以下の厳格な空間排他システムを必ず組み込むこと：
+
+1. **すべての配置要素に対する統一占有矩形（`occupancyBox`）の定義**：
+   - マップ上の全要素（①背景装飾プロップ `decorations`、②背景一体型タスク設備 `taskAnchors`、③ベント `vents`、④ワープポータル `portals`、⑤緊急会議ボタン台座 `emergencyTable`、⑥監視カメラ・バイタル端末・ギミックスイッチ `utilityConsoles`）に、描画サイズに基づく厳密なバウンディングボックス `{ x, y, width, height }` と安全余白 `margin`（装飾同士は最低 `16px`、タスク設備の周囲は最低 `28px`）を定義する。
+2. **確定配置優先順位と自動排他解決関数 `resolveAndValidateMapDecorations(mapData)`**：
+   - マップロード時および `RuntimeHealthGuard` 検証時に必ず以下を実行する：
+     - **優先順位1（固定・最重要）**：壁コリジョン、ドア開口部、初期スポーン安全圏（`spawnPoint` 周囲半径 `140px`）、緊急会議ボタン台座。
+     - **優先順位2（インタラクト設備・ギミック）**：背景一体型タスク設備（`taskAnchors`）、ベント、ワープポータル、監視・バイタル端末、マップ特有ギミック装置。これら同士が重なる場合は自動で空き壁面・空きフロア座標へシフト配置する。
+     - **優先順位3（環境装飾プロップ）**：各部屋・通路に配置されるテーマ別装飾オブジェクト（机、培養ポッド、サーバーラック、コンテナ、クリスタル、植物など）。配置時に**既存の壁・ドア・通路中央動線（幅 `90px` 以上の通行帯）・優先順位1および2の占有矩形＋安全余白・および既に配置済みの他の装飾オブジェクトの占有矩形**とAABB（軸平行境界ボックス）交差判定を行い、1ピクセルでも交差する場合はその部屋の空き壁際または空きスペースへ自動再配置（空きがない場合は間引き除外）する。
+   - これにより、**「装飾と装飾がかぶる」「装飾がタスク設備やギミックに覆いかぶさって見えなくなる」「装飾がドアや通路を塞ぐ」現象を100%ゼロにする。**
+
+================================================================================
+5. 【新規役職バリエーション＆ゲームバランス・AI行動仕様（`roles-and-tasks.js` / `game-engine.js`）】
+================================================================================
+ロビーのゲーム設定モーダルから各役職の人数・出現確率・クールダウンを自由にカスタマイズ可能にし、参加人数（4〜15人）に応じた自動推奨プリセットボタンも実装すること。
+
+### 5.1 実装役職一覧
+- **【クルー陣営（CREWMATE FACTION）】**
+  1. **クルーメイト（Crewmate）**：基本役職。全タスク完了またはインポスター全員追放で勝利。
+  2. **シェリフ（Sheriff）**：固有スキル「正義の銃撃（Shoot）」。インポスターまたはキル可能な第三陣営を直接キルできるが、**誤ってクルー陣営を撃つと自爆（自分が死亡）するハイリスク・ハイリターン役職。**
+  3. **エンジニア（Engineer）**：固有スキル「ベント潜入（Vent）」および「遠隔サボタージュ修理（Remote Fix、1試合1回）」。インポスター同様にベントを使用してマップを素早く移動・目撃できる（滞在上限18秒・クールダウン15秒）。
+  4. **サイエンティスト（Scientist）**：固有スキル「携帯バイタル（Mobile Vitals）」。どこにいても全プレイヤーの生存・死亡状態をリアルタイム確認可能（バッテリー残量制、タスク完了で充電）。
+  5. **メイヤー（Mayor）**：固有パッシブ「2票投票（Double Vote）」。会議の投票フェーズで投じた票が**2票分**としてカウントされる。
+- **【インポスター陣営（IMPOSTOR FACTION）】**
+  6. **インポスター（Impostor）**：基本人外役職。キル、サボタージュ（停電・リアクター炉心融解・酸素枯渇・通信障害）、ベント移動が可能。
+  7. **シェイプシフター（Shapeshifter）**：固有スキル「変身（Morph）」。生存中の他プレイヤー1名の姿・名前・スキン・ペットに一定時間（例：20秒間）完全に成りすますことができる（変身時に証拠の殻／エフェクトが短時間残る）。
+  8. **ファントム（Phantom）**：固有スキル「透明化（Vanish）」。一定時間（例：12秒間）完全に姿を消して高速移動できる（透明化中はキル不可、解除時に短時間の硬直あり）。
+- **【第三陣営（NEUTRAL FACTION）】**
+  9. **ジェスター（Jester）**：固有勝利条件「追放勝利」。**緊急会議の投票によって自分が追放されると即座にジェスターの単独勝利となる。** タスク勝利はなく、怪しい動きをしてわざと吊られることを狙う。
+  10. **アーソニスト（Arsonist）**：固有スキル「オイル塗布（Douse）」＆「点火（Ignite）」。生存中の全他プレイヤーに近接してオイルを塗り終えた状態で「点火」を発動すると、一斉炎上させて単独勝利となる。
+
+### 5.2 AIボット（Bot）の現実的なタスク進行＆役職別思考ロジック
+- **AIタスク完了時間の適正化（高難易度150タスク対応）**：
+  - AIがタスク地点に到着したら、即完了させずに `aiTaskWorkRemaining` タイマーをセットする。
+  - **ショートタスク**：`9.0` 〜 `14.0` 秒（難易度 `HARD` 基準）
+  - **ロングタスク**：`18.0` 〜 `28.0` 秒
+  - **マルチステップタスク各工程**：`10.0` 〜 `16.0` 秒
+  - タスク完了後、すぐに次のタスク座標へ直行せず、`3.0` 〜 `6.5` 秒間の「周囲確認・立ち止まり・ランダム巡回ウェイト」を必ず挟むこと。
+- **AIの役職別行動**：
+  - インポスターAI：周囲に目撃者がいない（視野内に第3者がいない）ことを確認してから単独行動のクルーをキルし、最寄りのベントへ逃走またはアリバイ工作（タスク端末の前でフリをする）を行う。
+  - シェリフAI：目の前でキルやベント出入りを目撃した相手のみを確実に撃つ。
+  - ジェスターAI：タスク端末の前で不自然にウロウロしたり、遺体の近くを徘徊して容疑を集める行動をとる。
+
+================================================================================
+6. 【全150種の完全ユニークタスク体系・環境装飾完全一体化・UI/UX最適化仕様】
+================================================================================
+
+### 6.1 全150種タスクの重複・類似排除アーキテクチャ（`TASK_CATALOG_150`）
+単なるラベル変更や色違いの量産を徹底的に排除し、プレイヤーが毎試合まったく異なる知能・反射・論理・空間パズルを体験できるよう、**15の異なるインタラクション系統 × 各10種類の固有ギミック＆ルール設計＝合計150種類の独立タスク**を `roles-and-tasks.js` に完全定義すること。
+
+1. **系統01：高密度回路・多層配線パズル系（10種：`T001`〜`T010`）**
+   - 例：6本交差カラー配線（`T001`）、抵抗値合計一致ジャンパー接続（`T002`）、論理ゲート（AND/OR/XOR）通過配線（`T003`）、断線バイパスハンダ付け（`T004`）、三相交流ローテーション結線（`T005`）、光ファイバー屈折ミラー接続（`T006`）、ヒューズ定格電流マッチング（`T007`）、極性反転コンデンサ配線（`T008`）、シールドケーブル遮蔽アース結線（`T009`）、高圧リレー直列/並列切替配線（`T010`）。
+2. **系統02：制限時間＆ロック付き暗号・パスコード解読系（10種：`T011`〜`T020`）**
+   - 例：6桁ランダム英数字テンキー入力（`T011`）、シーザー暗号シフト復号入力（`T012`）、モールス信号オーディオ/点滅解読入力（`T013`）、2進数→16進数変換キーパッド（`T014`）、マトリックス座標ピンコード照合（`T015`）、生体認証ハッシュ照合コード（`T016`）、逆順ミラーパスワード入力（`T017`）、時間変化ワンタイムトークン追従入力（`T018`）、化学式原子番号パスコード（`T019`）、星図座標6桁ロック解除（`T020`）。※すべて誤入力・時間切れ時は**1.8〜2.5秒の入力ロック＋画面赤点滅＋リセットペナルティ**発動。
+3. **系統03：高段階シーケンス記憶・瞬間空間再現系（10種：`T021`〜`T030`）**
+   - 例：7段階リアクター発光シーケンス再現（`T021`）、瞬間表示5x5グリッド地雷記憶（`T022`）、星系コンステレーション点つなぎ記憶（`T023`）、和音メロディ音階順再現（`T024`）、DNA塩基配列（A/T/G/C）パターン記憶（`T025`）、航行ビーコン点滅リズム模倣（`T026`）、ナノマシン移動軌跡トレース記憶（`T027`）、装甲ハッチ開閉順序記憶（`T028`）、量子スピン上下パターン記憶（`T029`）、セキュリティカード記号順記憶（`T030`）。
+4. **系統04：極狭許容ゾーン・精密タイミング＆反射制御系（10種：`T031`〜`T040`）**
+   - 例：±2.5%幅4連続ディストリビュータ同期ストップ（`T031`）、高圧プラズマ弁パルス解放（`T032`）、レーザー核融合点火タイミング同調（`T033`）、軌道デブリ迎撃ロックオン射撃（`T034`）、遠心分離機ローター回転数ピンポイント固定（`T035`）、超伝導コイル冷却パルス注入（`T036`）、重力波干渉計ゼロ点キャリブレーション（`T037`）、反物質封じ込め磁場同期（`T038`）、ワープドライブ位相アライメント（`T039`）、緊急隔壁油圧ロックタイミング（`T040`）。
+5. **系統05：波形・周波数・スペクトル同調系（10種：`T041`〜`T050`）**
+   - 例：振幅・周波数・位相の3軸サイン波完全一致（`T041`）、深宇宙通信ノイズフィルタリング（`T042`）、ソナー反響エコー距離同調（`T043`）、分光スペクトル輝線マッチング（`T044`）、バイタル心電図波形安定化（`T045`）、シールド共鳴周波数チューニング（`T046`）、重力レンズ歪み補正スライダー（`T047`）、亜空間ビーコンキャリア波ロック（`T048`）、エンジン振動ハーモニクス相殺（`T049`）、量子ノイズキャンセリング位相反転（`T050`）。
+6. **系統06：配管・流体圧力・バルブ経路パズル系（10種：`T051`〜`T060`）**
+   - 例：回転パイプ連結による冷却水開通（`T051`）、3タンク目標リットル水差し計量パズル（`T052`）、燃料圧力均等化マルチバルブ調整（`T053`）、酸素循環ダクト気流ルート切替（`T054`）、有毒ガス排気ダンパー順次開放（`T055`）、推進剤ミキサー比率（3:5:2）調合（`T056`）、油圧シリンダー順次加圧シーケンス（`T057`）、極低温ヘリウム循環ループ閉鎖（`T058`）、排水ポンプ逆流防止弁ロック（`T059`）、蒸気タービン圧力逃がしバランス（`T060`）。
+7. **系統07：論理パズル・グリッド演算・配置系（10種：`T061`〜`T070`）**
+   - 例：4x4ライツアウト全消灯パズル（`T061`）、レーザーミラー反射ターゲット命中パズル（`T062`）、Nクイーン型センサー非干渉配置（`T063`）、マジックナンバー行・列合計一致パネル（`T064`）、回路基板テトロミノ型チップ隙間なし実装（`T065`）、一筆書きセキュリティノード巡回（`T066`）、重心バランスウェイト天秤調整（`T067`）、磁気極性（N/S）反発・吸着グリッド整列（`T068`）、暗号ギア歯車噛み合わせ連結（`T069`）、エネルギーセル最短経路ルーティング（`T070`）。
+8. **系統08：スライド・回転・機械ロック解除系（10種：`T071`〜`T080`）**
+   - 例：15パズル型装甲プレート整列（`T071`）、3重同心円リング暗号ダイヤル回転一致（`T072`）、金庫タンブラーピン高さ精密ピッキング（`T073`）、ラッシュアワー型貨物コンテナ搬出パズル（`T074`）、ルービック2x2面カラー統一（`T075`）、歯車比連動クランク角度調整（`T076`）、エアロック多段ボルト順次スライド解除（`T077`）、望遠鏡レンズ焦点3枚同時ピント合わせ（`T078`）、ジャイロスコープ3軸水平レベル出し（`T079`）、核燃料棒挿抜深度マニュアル制御（`T080`）。
+9. **系統09：照準・トラッキング・物理慣性操縦系（10種：`T081`〜`T090`）**
+   - 例：小惑星25個迎撃防衛シューティング（`T081`）、慣性スラスターによるシャトル精密ドッキング（`T082`）、移動するナノウイルス標本へのレーザー追跡照射（`T083`）、磁気クレーンによる危険物コンテナ移送（`T084`）、太陽フレアシールド可動追従ガード（`T085`）、空間歪み迷路の接触禁止ワイヤーイライラ棒（`T086`）、隕石群回避プローブ誘導（`T087`）、プラズマ溶接トーチの指定軌道なぞり（`T088`）、逃走する実験ドローンの電磁ネット捕獲（`T089`）、重力井戸スイングバイ軌道投入（`T090`）。
+10. **系統10：科学分析・医療診断・サンプル選別系（10種：`T091`〜`T100`）**
+    - 例：異常変異細胞5検体の顕微鏡選別抽出（`T091`）、遠心分離後の血清層ピペット精密抽出（`T092`）、未知鉱物サンプルの硬度・磁性・比重分類（`T093`）、クルー生体スキャン異常値10項目チェック（`T094`）、細菌培養シャーレへの抗生物質適正滴下（`T095`）、放射線同位体半減期グラフ照合（`T096`）、植物ドーム土壌pH・窒素・水分バランス調合（`T097`）、宇宙線被曝線量バッジデータ解析（`T098`）、エイリアン化石断片のジグソー復元（`T099`）、有害胞子フィルター汚染度レベル仕分け（`T100`）。
+11. **系統11：OS・端末セキュリティ・システム復旧系（10種：`T101`〜`T110`）**
+    - 例：破損セクタファイル断片デフラグ再結合（`T101`）、不正侵入マルウェアプロセス特定キル（`T102`）、ファイアウォールポート開閉ルール設定（`T103`）、暗号化カーネルログの異常行3箇所特定（`T104`）、バックアップサーバーRAIDアレイ再構築（`T105`）、AI暴走サブルーチン強制終了コマンド入力（`T106`）、通信衛星アンテナ方位角・仰角ロック（`T107`）、ストレージゴミデータ圧縮＆シュート投棄（`T108`）、量子暗号鍵ペア生成＆署名検証（`T109`）、システムクロック原子時計同期補正（`T110`）。
+12. **系統12：動力・エンジン・推進機関メンテナンス系（10種：`T111`〜`T120`）**
+    - 例：イオンエンジン電極カーボン除去研磨（`T111`）、反物質インジェクターノズル清掃＆再装着（`T112`）、補助バッテリーセル直列電圧チェック＆交換（`T113`）、冷却フィン異物除去＆熱伝導グリス塗布（`T114`）、推進剤タンク残留エア抜きポンピング（`T115`）、ターボポンプ回転軸バランスウェイト装着（`T116`）、主電源ブレーカー順次投入シーケンス（`T117`）、太陽電池パネル展開角度最適化（`T118`）、ワープコア結晶アライメント微調整（`T119`）、緊急脱出ポッド点火プラグ導通検査（`T120`）。
+13. **系統13：複数部屋巡回・2段階リレータスク系（10種：`T121`〜`T130`）**
+    - ※すべて「部屋Aで第1工程（ミニゲーム＋待機）→ 部屋Bへ移動して第2工程」の2段階構成。
+    - 例：通信室データ抽出→ブリッジ送信（`T121`）、医務室検体採取→ラボ遠心解析（`T122`）、倉庫バッテリー充電→機関室装填（`T123`）、カフェテリアゴミ回収→ダストシュート投棄（`T124`）、燃料庫タンク充填→左右エンジン給油（`T125`）、セキュリティ暗号鍵取得→金庫室解錠（`T126`）、観測室星図スキャン→航法室ルート入力（`T127`）、浄水場フィルター洗浄→植物園給水（`T128`）、兵器庫照準チップ校正→タレット室装填（`T129`）、リアクター冷却剤抽出→シールド室注入（`T130`）。
+14. **系統14：広域3段階・長距離エンジニアリングリレー系（10種：`T131`〜`T140`）**
+    - ※マップの離れた3部屋を順に巡る最高難度ロングタスク群。
+    - 例：第1〜第3配電盤順次ブレーカー復旧（`T131`）、北・東・西センサービーコン3点校正（`T132`）、冷却水循環ポンプA→B→C圧力開通（`T133`）、緊急酸素ボンベ3区画巡回補充（`T134`）、船体外殻亀裂3箇所超音波スキャン＆溶接（`T135`）、通信中継器3ノード位相リンク確立（`T136`）、重力発生装置3基シンクロ起動（`T137`）、監視カメラ3系統レンズクリーニング＆再起動（`T138`）、防火シャッター3区画作動テスト（`T139`）、ブラックボックスフライトログ3端末回収（`T140`）。
+15. **系統15：コモン・全員共通艦内プロトコル系（10種：`T141`〜`T150`）**
+    - 例：クルーIDカード精密スワイプ（適正速度0.6〜0.8秒厳守、`T141`）、生体網膜＋掌紋ダブル認証（`T142`）、船内時刻・航行日誌デジタル署名（`T143`）、緊急避難経路ビーコン確認（`T144`）、与圧スーツ気密リークテスト（`T145`）、艦内放送マイク音量レベル校正（`T146`）、配給栄養カプセル在庫バーコードスキャン（`T147`）、磁気ブーツ磁力キャリブレーション（`T148`）、放射線防護服線量リセット（`T149`）、コマンドブリッジ出勤チェックイン認証（`T150`）。
+
+- **重複・類似タスク防止ガード（`TaskUniquenessGuard`）**：
+  - 1試合において、全プレイヤーへタスクを割り当てる際、**同一プレイヤー内に同じタスクID（`T001`〜`T150`）はもちろん、同じ系統（系統01〜15）から2個以上のタスクが重複して割り当てられないよう排他フィルタリングを必ず実行する。** これにより、1人のプレイヤーが受け持つ9個のタスクはすべて異なる系統・異なる操作感の完全オリジナルタスクとなる。
+
+### 6.2 タスクとマップ装飾の完全一体化デザイン＆近接発光ギミック
+タスクを「床や壁の上に浮いているだけの汎用的な丸いアイコンや四角いボタン」として描画することを禁止し、**マップの建築構造・環境装飾設備の一部として完全に一体化（Seamless Environmental Integration）**させること：
+
+1. **設備タイプ別の専用ビジュアル造形（10種以上の環境設備スキン）**：
+   - タスクの系統および配置されるマップのテーマに応じて、以下の専用設備グラフィックを壁面または床面に直接描画すること：
+     - `WALL_BREAKER_BOX`（壁埋め込み配電盤：開閉ハッチ・ケーブル導管・ステータスLED付き）
+     - `SERVER_RACK_TERMINAL`（大型サーバーラック：点滅するブレードLED・冷却ファン排気口・操作コンソール付き）
+     - `HOLO_COMMAND_CONSOLE`（傾斜型操縦・ナビゲーションコンソール：多層ガラススクリーン・物理スイッチ群付き）
+     - `BIO_INCUBATOR_POD`（生体培養・医療スキャン装置：ガラスシリンダー内の気泡・バイタル波形モニター付き）
+     - `FLUID_VALVE_MANIFOLD`（高圧配管バルブユニット：太い金属パイプと直結した赤/黄ハンドルバルブ＆圧力ゲージ付き）
+     - `FUSION_CORE_PYLON`（エネルギー炉制御ピラー：プラズマ光管と冷却フィンを備えた大型柱状設備）
+     - `CARGO_CRANE_PANEL`（工業用クレーン・貨物制御盤：虎縞警告フレーム・レバー操作盤付き）
+     - `BOTANICAL_PLANTER_UNIT`（バイオドーム植物管理槽：土壌センサーと水耕パイプが接続された大型プランター設備）
+     - `ANCIENT_RUNE_MONOLITH`（古代遺跡ホログラム石碑：ルーン彫刻と浮遊クリスタルを備えた石造端末）
+     - `WASTE_CHUTE_COMPACTOR`（ダストシュート圧縮機：重厚なスライドハッチと警告ランプを備えた壁面投棄口）
+2. **壁面・床面との物理的接続表現**：
+   - 壁際タスク（`mountType: 'WALL'`）は壁のタイル境界線にぴったり密着させ、天井や床へ伸びる配線ケーブル・配管パイプをセットで描画して「最初からそこに設置されている宇宙船の設備」であることを表現する。
+   - 独立型設備（`mountType: 'FLOOR'`）は床面に接地シャドウとボルト固定プレートを描画する。
+3. **非対象タスクの自然な環境溶け込み＆対象タスクの近接ハイライト**：
+   - 自分に割り当てられていない設備は、他の通常装飾オブジェクトとまったく同じ質感の「宇宙船の背景設備」として自然に風景に溶け込ませる。
+   - **自分に割り当てられた未完了タスク**に近づいた（半径 `85px` 以内）場合のみ、その設備のLEDランプ・モニター画面・エッジラインが**脈打つようにシアンブルー（またはゴールド）に発光**し、設備上部にコンパクトなキーガイド（`[E] 操作`）が浮かび上がる演出を実装すること。
+
+### 6.3 チャット・マップ・待機用ロビーUIの視認性最適化
+- **チャットUIの最適化**：
+  - 各発言者の左側に**プレイヤーカラーと同じ色のアバターアイコンバッジ**と役職/生存バッジを表示し、誰の発言か一瞬で判別できるようにする。
+  - 死亡者（霊界）のチャットは半透明のシアン/パープル系枠線で視覚的に区別し、生存者には見えないことを明示。
+  - 過去のログをさかのぼって読んでいる最中は自動スクロールを一時停止し、下部に「▼ 新着メッセージあり」バッジを表示。
+  - **カテゴリ分けクイックチャット**：「場所」「容疑」「タスク・生存報告」「返答」の4タブ切替＋ワンクリック入力/即送信ボタンをグラスモフィズムUIで実装。
+- **ミニマップ＆全体マップの最適化**：
+  - 画面右上のミニマップには現在位置のパルスマーカー、未完了タスクの黄色いターゲットアイコン、サボタージュ発生時の赤色警告パルス、および現在いる部屋名ラベルを鮮明に表示。
+  - `[M]` キーまたはマップボタンで開く全体マップオーバーレイでは、全部屋名・全タスク位置・インポスター/エンジニア用のベント接続線ネットワーク・インポスター用のサボタージュ発動ボタンを直感的に操作可能にする。
+- **待機用ロビーのデザイン踏襲＆HUD最適化**：
+  - 待機部屋（ロビー）のマップ空間・背景グラフィック・オブジェクト配置はベースとなる `starship-impostor-deluxe.html` の馴染み深いデザインを維持しつつ、HUDを以下のように見やすく整理する：
+    - **上部ステータスバー**：ルームコード（ワンクリックコピーボタン＆「コピー完了！」トースト付き）、現在選択中のマップ名、インポスター数・タスク難易度バッジ、接続Ping（ms）を1行にスッキリ集約。
+    - **右サイド参加者リストパネル**：参加中のプレイヤー（人間・AI）のカラーアイコン・名前・ホスト王冠マーク・準備完了状態をコンパクトに表示。
+    - **下部アクションドック**：`[カスタマイズ端末]`（カラー排他制御・スキン・帽子・ミニペット15種をリアルタイムプレビュー変更）、`[マップ選択（全30種）]`、`[ルール・役職図鑑]`、`[設定（HUD・キーバインド・変更記録・エラーログ）]`、およびホスト専用の `[ゲーム設定]`・`[ゲーム開始]` ボタンを誤操作しにくい間隔で美しく配置。
+  - **不要UIの削除**：「単一HTMLを保存」などのファイル保存ボタンは完全に削除すること。
+
+### 6.4 初心者向けルール説明＆実践チュートリアル（`tutorial-guide.js`）
+- **ルール説明＆役職図鑑モーダル**：タイトル画面・ロビー・試合中メニューからいつでも開ける4タブ構成（①基本ルールと勝利条件、②PC/スマホ操作ガイド、③全10役職の能力図鑑、④タスク・サボタージュ・ギミック解説）。
+- **実践型インタラクティブチュートリアルモード**：タイトル画面の「チュートリアル（初心者演習）」ボタンから起動。AIボットが配置された専用演習船で、ステップ1（移動とミニマップ確認）→ ステップ2（タスク完了体験）→ ステップ3（遺体発見と緊急会議・投票体験）→ ステップ4（インポスターのキル＆ベント体験）をガイド矢印と解説バナー付きで実際に操作しながら学べるモード。
+- **役職発表カットインのワンポイント目標ヒント**：試合開始時の役職公開画面に、自分の役職に応じた1行の行動指針（例：シェリフなら「怪しい相手を撃て！ただしクルーを撃つと自爆するぞ！」）を表示。
+
+================================================================================
+7. 【実装チェックリスト（出力前の自己検証項目）】
+================================================================================
+コード生成完了前に、以下の全項目が欠落なく実装されていることを必ず確認すること：
+- [ ] モジュール分割構成（`index.html`, `style.css`, `changelog.js`, `error-logger.js`, `firebase-network.js`, `maps-data.js`, `roles-and-tasks.js`, `tutorial-guide.js`, `game-engine.js`, `app-ui.jsx`）でクリーンに整理されているか。
+- [ ] `CHANGELOG_REGISTRY` が `Object.freeze` で不変保護され、過去の記録が1文字も改ざんされておらず、設定画面の「変更記録」タブから閲覧できるか。
+- [ ] エラー永続記録（`localStorage`）と設定画面の「エラーログ」タブ（閲覧・コピー・クリア機能）が実装されているか。
+- [ ] 過去実装箇所の軽量化・リファクタリング等を勝手に行っておらず、依頼外修正がある場合は完了報告にすべて明記する準備ができているか。
+- [ ] 全10項目のバグ再発防止ガード（死者通報防止、クールダウン初期化、テレポート同期、スポーン地点タスク除外、AI対戦マップ動的ロード、タスクイベント安定化、Firebase他デバイス間クロスプレイ＆ラグ軽減＆自動退出＆ホスト自動移譲、重複プレイヤー同時キル防止、全150種完全ユニークタスク＆難易度引き上げ＆AI作業時間適正化、全30マップテーマ別装飾＆マップ特有ギミック＆既存ギミックバランス調整＆タスク完全一体化＆装飾重複防止ガード）がすべて動作しているか。
+- [ ] 初心者向けルール説明＆実践チュートリアル、高視認性マップ選択モーダル（全30マップ）、最適化されたチャット・ミニマップ・ロビーHUD、および「単一HTMLを保存」ボタンの削除が完了しているか。
+================================================================================
